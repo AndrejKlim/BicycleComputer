@@ -15,46 +15,81 @@ int prevHallValue;
 uint32_t startTime = millis();
 uint32_t previousTime;
 uint32_t currentTime;
+int wheelDiameter = 2100; // in mm
+uint32_t totalTime = 0; // in seconds
+uint32_t totalTurnCount = 0;
+
+void displaySpeed(const uint32_t &rollTime);
+
+void initDisplay();
 
 void setup() {
-    Serial.begin(9600);
+  Serial.begin(9600);
 
-    pinMode(HallSensor, INPUT);
+  pinMode(HallSensor, INPUT);
+  initDisplay();
 
-    // SSD1306_SWITCHCAPVCC = generate display voltage from 3.3V internally
-    if (!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {
-        Serial.println(F("SSD1306 allocation failed"));
-        for (;;); // Don't proceed, loop forever
-    }
-
-    startTime = millis();
-    previousTime = currentTime;
-    prevHallValue = 1;
+  startTime = millis();
+  previousTime = currentTime;
+  prevHallValue = 1;
 }
 
 void loop() {
-    if (isHallActivated(prevHallValue)) {
-        currentTime = millis();
-        uint32_t rollTime = currentTime - previousTime;
-        previousTime = millis();
-        Serial.println("Время на один оборот " + (String) rollTime);
+  if (isHallActivated(prevHallValue)) {
+    uint32_t rollTime = getTurnTimeMs();
+    Serial.println("Время на один оборот " + (String) rollTime);
 
-        display.clearDisplay();
-        display.setTextSize(6);             // Normal 1:1 pixel scale
-        display.setTextColor(SSD1306_WHITE);        // Draw white text
-        display.setCursor(0, 0);             // Start at top-left corner
-        display.println((String) rollTime);
-        display.display();
-    }
+    displaySpeed(rollTime);
+  }
 
-    prevHallValue = checkHall();
-    delay(10);
+  prevHallValue = checkHall();
+  delay(10);
 }
 
+void initDisplay() {// SSD1306_SWITCHCAPVCC = generate display voltage from 3.3V internally
+  if (!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {
+    Serial.println(F("SSD1306 allocation failed"));
+    for (;;); // Don't proceed, loop forever
+  }
+}
+
+void displaySpeed(const uint32_t rollTime) {
+  display.clearDisplay();
+  display.setTextSize(6);             // Normal 1:1 pixel scale
+  display.setTextColor(SSD1306_WHITE);        // Draw white text
+  display.setCursor(0, 0);             // Start at top-left corner
+  display.println((String) rollTime);
+  display.display();
+}
+
+
 bool isHallActivated(int previousHallValue) {
-    return (previousHallValue == 1 and checkHall() == 0);
+  return (previousHallValue == 1 and checkHall() == 0);
+}
+
+uint32_t getTurnTimeMs() {
+  currentTime = millis();
+  uint32_t rollTime = currentTime - previousTime;
+  previousTime = currentTime;
+  return rollTime;
 }
 
 int checkHall() {
-    return digitalRead(HallSensor);
+  return digitalRead(HallSensor);
+}
+
+void incrementTotalTurnCount() {
+  totalTurnCount++;
+}
+
+int getTotalPath() {
+  return totalTurnCount / wheelDiameter;
+}
+
+int getAverageVelocity() {
+  return getTotalPath() / totalTime;
+}
+
+float roundAverageVelocity() {
+  return getAverageVelocity();
 }
