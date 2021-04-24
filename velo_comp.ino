@@ -11,39 +11,48 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 #define HallSensor 2
 
-int prevHallValue;
 uint32_t startTime = millis();
-uint32_t previousTime;
-uint32_t currentTime;
 int wheelDiameter = 2100; // in mm
 uint32_t totalTime = 0; // in seconds
-uint32_t totalTurnCount = 0;
+uint32_t showTimer;
 
-void displaySpeed(const uint32_t &rollTime);
+volatile long totalTurnCount = 0;
+volatile bool hallActivated;
+long prevTurnCount = 0;
+uint32_t previousTime = 0;
 
+void displaySpeed(float speed);
 void initDisplay();
+void incrementTotalTurnCount();
+float getCurrentSpeedKmph(uint32_t time);
 
 void setup() {
   Serial.begin(9600);
 
-  pinMode(HallSensor, INPUT);
   initDisplay();
+  // D2 это прерывание 0
+  // обработчик - функция incrementTotalTurnCount
+  attachInterrupt(0, incrementTotalTurnCount, FALLING);
 
   startTime = millis();
-  previousTime = currentTime;
-  prevHallValue = 1;
 }
 
 void loop() {
-  if (isHallActivated(prevHallValue)) {
-    uint32_t rollTime = getTurnTimeMs();
-    Serial.println("Время на один оборот " + (String) rollTime);
 
-    displaySpeed(rollTime);
+  uint32_t turnTime;
+
+  if (hallActivated) {
+    hallActivated = false;
+    uint32_t ms = millis();
+    turnTime = ms - previousTime;
+    previousTime = ms;
+    
+    float currentSpeed = getCurrentSpeedKmph(turnTime);
+    displaySpeed(currentSpeed);
+    Serial.println("скорость " + (String) currentSpeed);
   }
 
-  prevHallValue = checkHall();
-  delay(10);
+  delay(5);
 }
 
 void initDisplay() {// SSD1306_SWITCHCAPVCC = generate display voltage from 3.3V internally
@@ -53,33 +62,18 @@ void initDisplay() {// SSD1306_SWITCHCAPVCC = generate display voltage from 3.3V
   }
 }
 
-void displaySpeed(const uint32_t rollTime) {
+void displaySpeed(float speed) {
   display.clearDisplay();
-  display.setTextSize(6);             // Normal 1:1 pixel scale
+  display.setTextSize(4);             // Normal 1:1 pixel scale
   display.setTextColor(SSD1306_WHITE);        // Draw white text
   display.setCursor(0, 0);             // Start at top-left corner
-  display.println((String) rollTime);
+  display.println((String) speed);
   display.display();
-}
-
-
-bool isHallActivated(int previousHallValue) {
-  return (previousHallValue == 1 and checkHall() == 0);
-}
-
-uint32_t getTurnTimeMs() {
-  currentTime = millis();
-  uint32_t rollTime = currentTime - previousTime;
-  previousTime = currentTime;
-  return rollTime;
-}
-
-int checkHall() {
-  return digitalRead(HallSensor);
 }
 
 void incrementTotalTurnCount() {
   totalTurnCount++;
+  hallActivated = true;
 }
 
 int getTotalPath() {
@@ -92,4 +86,10 @@ int getAverageVelocity() {
 
 float roundAverageVelocity() {
   return getAverageVelocity();
+}
+
+// возвращает скорость в км/ч по числу оборотов и времени в мс
+float getCurrentSpeedKmph(uint32_t time){
+  Serial.println("время в функции: " + (String) time);
+  return (wheelDiameter/1000.0f) / (time/1000.0f) * 3.6f;
 }
