@@ -9,22 +9,34 @@
 #define SCREEN_ADDRESS 0x3C
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
-#define HallSensor 2
+#define menuButton 3
 
 uint32_t startTime = millis();
 int wheelDiameter = 2100; // in mm
 uint32_t totalTime = 0; // in seconds
 uint32_t showTimer;
+uint32_t turnTime;
 
 volatile long totalTurnCount = 0;
 volatile bool hallActivated;
 long prevTurnCount = 0;
 uint32_t previousTime = 0;
+byte buttonPressCount = 0;
 
+void displayString(String info);
 void displaySpeed(float speed);
+void displayTotalTime();
+void displayTotalDistance();
+void displayAverageSpeed();
+
 void initDisplay();
 void incrementTotalTurnCount();
+void setTurnTime();
 float getCurrentSpeedKmph(uint32_t time);
+void handleMenuButtonPress();
+void displayChosenInfo();
+float getTotalDistance();
+float getAverageVelocityKmph();
 
 void setup() {
   Serial.begin(9600);
@@ -33,26 +45,58 @@ void setup() {
   // D2 это прерывание 0
   // обработчик - функция incrementTotalTurnCount
   attachInterrupt(0, incrementTotalTurnCount, FALLING);
-
+  pinMode(menuButton, INPUT_PULLUP);
   startTime = millis();
 }
 
 void loop() {
+  setTurnTime();
+  handleMenuButtonPress();
+  displayChosenInfo();
 
-  uint32_t turnTime;
+  delay(5);
+}
 
+void setTurnTime(){
   if (hallActivated) {
     hallActivated = false;
     uint32_t ms = millis();
     turnTime = ms - previousTime;
     previousTime = ms;
-    
-    float currentSpeed = getCurrentSpeedKmph(turnTime);
-    displaySpeed(currentSpeed);
-    Serial.println("скорость " + (String) currentSpeed);
+    totalTime += turnTime;
   }
+}
 
-  delay(5);
+void handleMenuButtonPress(){
+  int buttonState = digitalRead(menuButton);
+  if (buttonState == LOW){
+    buttonPressCount++;
+    if (buttonPressCount > 3){
+      buttonPressCount = 0;
+    }
+    Serial.println("Menu number " + (String) buttonPressCount);
+  }
+}
+
+void displayChosenInfo(){
+  switch (buttonPressCount) {
+    case 0:
+      displaySpeed(getCurrentSpeedKmph(turnTime));
+      break;
+    case 1:
+      displayTotalTime();
+      break;
+    case 2:
+      displayTotalDistance();
+      break;
+    case 3:
+      displayAverageSpeed();
+      break;
+    default:
+      displaySpeed(getCurrentSpeedKmph(turnTime));
+      break;
+  }
+  delay(200);
 }
 
 void initDisplay() {// SSD1306_SWITCHCAPVCC = generate display voltage from 3.3V internally
@@ -62,13 +106,33 @@ void initDisplay() {// SSD1306_SWITCHCAPVCC = generate display voltage from 3.3V
   }
 }
 
-void displaySpeed(float speed) {
+void displayString(String info, int textSize){
   display.clearDisplay();
-  display.setTextSize(4);             // Normal 1:1 pixel scale
+  display.setTextSize(textSize);             // Normal 1:1 pixel scale
   display.setTextColor(SSD1306_WHITE);        // Draw white text
-  display.setCursor(0, 0);             // Start at top-left corner
-  display.println((String) speed);
+  display.setCursor(0, 0);
+  display.println(info);
   display.display();
+}
+
+void displaySpeed(float speed) {
+  Serial.println("Speed " + (String) speed);
+  displayString((String) speed, 1);
+}
+
+void displayTotalTime(){
+  Serial.println("Total time " + (String) totalTime);
+  displayString((String) totalTime, 1);
+}
+
+void displayTotalDistance(){
+  Serial.println("Total distance " + (String) getTotalDistance());
+  displayString((String) getTotalDistance(), 1);
+}
+
+void displayAverageSpeed(){
+  Serial.println("Average speed " + (String) getAverageVelocityKmph());
+  displayString((String) getAverageVelocityKmph(), 1);
 }
 
 void incrementTotalTurnCount() {
@@ -76,16 +140,13 @@ void incrementTotalTurnCount() {
   hallActivated = true;
 }
 
-int getTotalPath() {
-  return totalTurnCount / wheelDiameter;
+// in meters
+float getTotalDistance() {
+  return totalTurnCount * (wheelDiameter / 1000.0f);
 }
 
-int getAverageVelocity() {
-  return getTotalPath() / totalTime;
-}
-
-float roundAverageVelocity() {
-  return getAverageVelocity();
+float getAverageVelocityKmph() {
+  return getTotalDistance() / (totalTime/1000.0f) * 3.6f;
 }
 
 // возвращает скорость в км/ч по числу оборотов и времени в мс
