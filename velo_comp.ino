@@ -12,6 +12,7 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 #define menuButton 3
 
 int wheelDiameter = 2100; // in mm
+uint32_t startTime;
 uint32_t totalTime = 0; // in seconds
 uint32_t showTimer;
 uint32_t turnTime;
@@ -46,12 +47,16 @@ void setup() {
   attachInterrupt(0, incrementTotalTurnCount, FALLING);
   attachInterrupt(1, incrementButtonCLicks, FALLING);
   pinMode(menuButton, INPUT_PULLUP);
+
+  startTime = millis();
 }
 
 void loop() {
   setTurnTime();
+  
   if (millis() - showTimer >= 200){
     showTimer = millis();
+    totalTime = showTimer - startTime;
     displayChosenInfo();
   }
 
@@ -64,12 +69,10 @@ void setTurnTime(){
     uint32_t ms = millis();
     turnTime = ms - previousTime;
     previousTime = ms;
-    totalTime += turnTime;
   }
 }
 
 void displayChosenInfo(){
-  Serial.println("Menu number " + (String) buttonPressCount);
   switch (buttonPressCount) {
     case 0:
       displaySpeed(getCurrentSpeedKmph(turnTime));
@@ -148,6 +151,5 @@ float getAverageVelocityKmph() {
 
 // возвращает скорость в км/ч по числу оборотов и времени в мс
 float getCurrentSpeedKmph(uint32_t time){
-  Serial.println("время в функции: " + (String) time);
   return (wheelDiameter/1000.0f) / (time/1000.0f) * 3.6f;
 }
