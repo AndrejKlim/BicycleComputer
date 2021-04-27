@@ -11,7 +11,6 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 #define menuButton 3
 
-uint32_t startTime = millis();
 int wheelDiameter = 2100; // in mm
 uint32_t totalTime = 0; // in seconds
 uint32_t showTimer;
@@ -21,7 +20,7 @@ volatile long totalTurnCount = 0;
 volatile bool hallActivated;
 long prevTurnCount = 0;
 uint32_t previousTime = 0;
-byte buttonPressCount = 0;
+volatile byte buttonPressCount = 0;
 
 void displayString(String info);
 void displaySpeed(float speed);
@@ -31,9 +30,9 @@ void displayAverageSpeed();
 
 void initDisplay();
 void incrementTotalTurnCount();
+void incrementButtonCLicks();
 void setTurnTime();
 float getCurrentSpeedKmph(uint32_t time);
-void handleMenuButtonPress();
 void displayChosenInfo();
 float getTotalDistance();
 float getAverageVelocityKmph();
@@ -45,14 +44,16 @@ void setup() {
   // D2 это прерывание 0
   // обработчик - функция incrementTotalTurnCount
   attachInterrupt(0, incrementTotalTurnCount, FALLING);
+  attachInterrupt(1, incrementButtonCLicks, FALLING);
   pinMode(menuButton, INPUT_PULLUP);
-  startTime = millis();
 }
 
 void loop() {
   setTurnTime();
-  handleMenuButtonPress();
-  displayChosenInfo();
+  if (millis() - showTimer >= 200){
+    showTimer = millis();
+    displayChosenInfo();
+  }
 
   delay(5);
 }
@@ -67,18 +68,8 @@ void setTurnTime(){
   }
 }
 
-void handleMenuButtonPress(){
-  int buttonState = digitalRead(menuButton);
-  if (buttonState == LOW){
-    buttonPressCount++;
-    if (buttonPressCount > 3){
-      buttonPressCount = 0;
-    }
-    Serial.println("Menu number " + (String) buttonPressCount);
-  }
-}
-
 void displayChosenInfo(){
+  Serial.println("Menu number " + (String) buttonPressCount);
   switch (buttonPressCount) {
     case 0:
       displaySpeed(getCurrentSpeedKmph(turnTime));
@@ -96,7 +87,6 @@ void displayChosenInfo(){
       displaySpeed(getCurrentSpeedKmph(turnTime));
       break;
   }
-  delay(200);
 }
 
 void initDisplay() {// SSD1306_SWITCHCAPVCC = generate display voltage from 3.3V internally
@@ -138,6 +128,13 @@ void displayAverageSpeed(){
 void incrementTotalTurnCount() {
   totalTurnCount++;
   hallActivated = true;
+}
+
+void incrementButtonCLicks(){
+  buttonPressCount++;
+  if (buttonPressCount > 3){
+    buttonPressCount = 0;
+  }
 }
 
 // in meters
